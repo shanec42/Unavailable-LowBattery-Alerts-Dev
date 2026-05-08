@@ -9,9 +9,13 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .const import DOMAIN
 from .coordinator import DeviceAlertsCoordinator
 
+# Device name "Device Alerts" + has_entity_name=True + sensor name "Unavailable"
+# → entity_id: sensor.device_alerts_unavailable
+# Device name "Device Alerts" + has_entity_name=True + sensor name "Low Battery"
+# → entity_id: sensor.device_alerts_low_battery
 _DEVICE_INFO = {
     "identifiers": {(DOMAIN, "device_alerts")},
-    "name": "Unavailable & Low Battery Alerts",
+    "name": "Device Alerts",
     "manufacturer": "shanec42",
 }
 
@@ -29,14 +33,15 @@ async def async_setup_entry(
 
 
 class DeviceAlertsUnavailableSensor(CoordinatorEntity, SensorEntity):
-    """Sensor reporting count of currently unavailable devices.
+    """Count of currently unavailable devices.
 
     entity_id: sensor.device_alerts_unavailable
     attributes.devices: dict of uuid → device info
     """
 
+    _attr_has_entity_name = True
+    _attr_name = "Unavailable"
     _attr_icon = "mdi:alert-circle"
-    _attr_name = "Device Alerts Unavailable"
 
     def __init__(self, coordinator: DeviceAlertsCoordinator, entry_id: str) -> None:
         super().__init__(coordinator)
@@ -60,14 +65,15 @@ class DeviceAlertsUnavailableSensor(CoordinatorEntity, SensorEntity):
 
 
 class DeviceAlertsLowBatterySensor(CoordinatorEntity, SensorEntity):
-    """Sensor reporting count of devices with low battery.
+    """Count of devices with low battery.
 
     entity_id: sensor.device_alerts_low_battery
     attributes.devices: dict of entity_id → battery info
     """
 
+    _attr_has_entity_name = True
+    _attr_name = "Low Battery"
     _attr_icon = "mdi:battery-alert"
-    _attr_name = "Device Alerts Low Battery"
 
     def __init__(self, coordinator: DeviceAlertsCoordinator, entry_id: str) -> None:
         super().__init__(coordinator)
