@@ -24,7 +24,7 @@ input_text:
     # Format: {"sensor.my_lock_battery": 10, "sensor.my_sensor_battery": 15}
     # Devices not listed use the global threshold above.
     initial: "{}"
-    max: 1024
+    max: 255
     icon: mdi:code-json
 
   device_alerts_ignore_patterns:
@@ -32,7 +32,7 @@ input_text:
     # Comma-separated glob patterns matching entity IDs.
     # Examples: *plex*, sensor.my_device_*, sensor.my_sensor_battery
     initial: ""
-    max: 1024
+    max: 255
     icon: mdi:regex
 
   device_alerts_ignore_uuids:
@@ -40,7 +40,7 @@ input_text:
     # Comma-separated HA device UUIDs (found in Settings → Devices → device info).
     # Ignoring a UUID suppresses the entire device regardless of entity names.
     initial: ""
-    max: 1024
+    max: 255
     icon: mdi:identifier
 
   device_alerts_notify_mobile_services:
