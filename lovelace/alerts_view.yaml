@@ -1,0 +1,322 @@
+# Unavailable & Low Battery Alerts — Lovelace Dashboard View
+#
+# Paste this into a new dashboard view using the Raw Configuration Editor.
+# Requires these HACS frontend cards (install via HACS → Frontend):
+#   - iantrich/config-template-card
+#   - custom-cards/button-card
+#   - Sian-Lee-SA/lovelace-expander-card
+#   - thomasloven/lovelace-auto-entities
+#   - thomasloven/lovelace-layout-card
+
+title: Alerts
+id: alerts
+path: alerts
+icon: mdi:alert-circle-outline
+type: custom:horizontal-layout
+
+cards:
+
+  ###########################################################################
+  ## Column 1 — Active Alerts
+  ###########################################################################
+
+  - type: markdown
+    view_layout:
+      column: 1
+    content: "## Active Alerts"
+
+  - type: button
+    view_layout:
+      column: 1
+    name: "Run Check Now"
+    icon: mdi:refresh
+    icon_height: 30px
+    tap_action:
+      action: call-service
+      service: device_alerts.run_check
+
+  - type: custom:config-template-card
+    view_layout:
+      column: 1
+    entities:
+      - sensor.device_alerts_unavailable
+    card:
+      type: vertical-stack
+      cards: >-
+        ${(function(){
+          var devs=(states['sensor.device_alerts_unavailable']
+            &&states['sensor.device_alerts_unavailable'].attributes
+            &&states['sensor.device_alerts_unavailable'].attributes.devices)||{};
+          var entries=Object.entries(devs);
+          if(entries.length===0){
+            return[{type:'markdown',title:'Unavailable Devices',content:'*No unavailable devices.*'}];
+          }
+          entries.sort(function(a,b){return(a[1].snoozed_until?1:0)-(b[1].snoozed_until?1:0);});
+          return[{type:'markdown',content:'### Unavailable Devices'}].concat(
+            entries.map(function(e){
+              var uuid=e[0],info=e[1];
+              var title=(info.name||uuid)+(info.model?' ('+info.model+')':'');
+              var detail='Since: **'+(info.since||'?').slice(0,19)+'**'
+                +(info.snoozed_until?'  —  *(snoozed until '+info.snoozed_until.slice(0,16)+')*':'')
+                +'\n`'+uuid+'`';
+              var iconName=info.snoozed_until?'mdi:sleep':'mdi:alert-decagram';
+              var iconColor=info.snoozed_until?'#9E9E9E':'#FF9800';
+              return{
+                type:'horizontal-stack',
+                cards:[
+                  {
+                    type:'custom:button-card',
+                    icon:iconName,
+                    color:iconColor,
+                    show_name:false,
+                    tap_action:{action:'none'},
+                    card_mod:{style:':host{flex:0 0 56px!important}ha-card{box-shadow:none;background:none}'}
+                  },
+                  {
+                    type:'custom:expander-card',
+                    title:title,
+                    clear:false,
+                    cards:[
+                      {type:'markdown',content:detail},
+                      {type:'horizontal-stack',cards:[
+                        {show_name:true,show_icon:true,type:'button',
+                         name:'Snooze 7 Days',icon:'mdi:sleep',icon_height:'30px',
+                         tap_action:{action:'call-service',
+                           service:'device_alerts.quick_snooze',
+                           service_data:{uuid:uuid}}},
+                        {show_name:true,show_icon:true,type:'button',
+                         name:'Ignore',icon:'mdi:eye-off',icon_height:'30px',
+                         tap_action:{action:'call-service',
+                           service:'device_alerts.quick_ignore',
+                           service_data:{uuid:uuid}}}
+                      ]}
+                    ]
+                  }
+                ]
+              };
+            })
+          );
+        })()}
+
+  - type: custom:config-template-card
+    view_layout:
+      column: 1
+    entities:
+      - sensor.device_alerts_low_battery
+    card:
+      type: vertical-stack
+      cards: >-
+        ${(function(){
+          var devs=(states['sensor.device_alerts_low_battery']
+            &&states['sensor.device_alerts_low_battery'].attributes
+            &&states['sensor.device_alerts_low_battery'].attributes.devices)||{};
+          var entries=Object.entries(devs);
+          if(entries.length===0){
+            return[{type:'markdown',title:'Low Battery',content:'*No low battery alerts.*'}];
+          }
+          entries.sort(function(a,b){return(a[1].snoozed_until?1:0)-(b[1].snoozed_until?1:0);});
+          return[{type:'markdown',content:'### Low Battery'}].concat(
+            entries.map(function(e){
+              var eid=e[0],info=e[1];
+              var stateStr=(info.state==='unavailable'||info.state==='unknown')?info.state:info.state+'%';
+              var title=info.name+': '+stateStr;
+              var detail='State: **'+stateStr+'** (threshold: '+info.threshold+'%)'
+                +(info.snoozed_until?'  —  *(snoozed until '+info.snoozed_until.slice(0,16)+')*':'')
+                +'\n`'+eid+'`';
+              var iconName=info.snoozed_until?'mdi:sleep':'mdi:battery-alert';
+              var iconColor=info.snoozed_until?'#9E9E9E':'#FF9800';
+              return{
+                type:'horizontal-stack',
+                cards:[
+                  {
+                    type:'custom:button-card',
+                    icon:iconName,
+                    color:iconColor,
+                    show_name:false,
+                    tap_action:{action:'none'},
+                    card_mod:{style:':host{flex:0 0 56px!important}ha-card{box-shadow:none;background:none}'}
+                  },
+                  {
+                    type:'custom:expander-card',
+                    title:title,
+                    clear:false,
+                    cards:[
+                      {type:'markdown',content:detail},
+                      {type:'horizontal-stack',cards:[
+                        {type:'button',name:'5%',show_name:true,show_icon:true,icon:'mdi:battery-20',icon_height:'24px',
+                         tap_action:{action:'call-service',service:'device_alerts.set_battery_threshold',service_data:{entity_id:eid,threshold:5}}},
+                        {type:'button',name:'10%',show_name:true,show_icon:true,icon:'mdi:battery-30',icon_height:'24px',
+                         tap_action:{action:'call-service',service:'device_alerts.set_battery_threshold',service_data:{entity_id:eid,threshold:10}}},
+                        {type:'button',name:'15%',show_name:true,show_icon:true,icon:'mdi:battery-40',icon_height:'24px',
+                         tap_action:{action:'call-service',service:'device_alerts.set_battery_threshold',service_data:{entity_id:eid,threshold:15}}},
+                        {type:'button',name:'20%',show_name:true,show_icon:true,icon:'mdi:battery-50',icon_height:'24px',
+                         tap_action:{action:'call-service',service:'device_alerts.set_battery_threshold',service_data:{entity_id:eid,threshold:20}}},
+                        {type:'button',name:'25%',show_name:true,show_icon:true,icon:'mdi:battery-60',icon_height:'24px',
+                         tap_action:{action:'call-service',service:'device_alerts.set_battery_threshold',service_data:{entity_id:eid,threshold:25}}}
+                      ]},
+                      {type:'horizontal-stack',cards:[
+                        {type:'button',name:'Reset',show_name:true,show_icon:true,icon:'mdi:restore',icon_height:'24px',
+                         tap_action:{action:'call-service',service:'device_alerts.set_battery_threshold',service_data:{entity_id:eid,threshold:0}}},
+                        {type:'button',name:'Snooze 7 Days',show_name:true,show_icon:true,icon:'mdi:sleep',icon_height:'24px',
+                         tap_action:{action:'call-service',service:'device_alerts.quick_snooze',service_data:{uuid:eid}}}
+                      ]}
+                    ]
+                  }
+                ]
+              };
+            })
+          );
+        })()}
+
+  - type: entities
+    view_layout:
+      column: 1
+    title: "HA Notifications"
+    entities:
+      - type: custom:auto-entities
+        card:
+          type: entities
+        filter:
+          include:
+            - domain: persistent_notification
+
+  - type: markdown
+    view_layout:
+      column: 1
+    content: "## Snooze / Acknowledge an Alert"
+
+  - type: markdown
+    view_layout:
+      column: 1
+    content: >
+      Snooze suppresses notifications until the selected date/time.
+      Normal alerting resumes automatically when the snooze expires (if the issue persists).
+
+  - type: entities
+    view_layout:
+      column: 1
+    title: "Snooze Settings"
+    entities:
+      - entity: input_select.device_alerts_snooze_target
+        name: "Device / Sensor to Snooze"
+      - entity: input_datetime.device_alerts_snooze_until
+        name: "Snooze Until"
+
+  - type: horizontal-stack
+    view_layout:
+      column: 1
+    cards:
+      - type: button
+        name: "Add / Update Snooze"
+        icon: mdi:sleep
+        icon_height: 30px
+        tap_action:
+          action: call-service
+          service: device_alerts.add_snooze
+      - type: button
+        name: "Clear Snooze"
+        icon: mdi:sleep-off
+        icon_height: 30px
+        tap_action:
+          action: call-service
+          service: device_alerts.clear_snooze
+
+  ###########################################################################
+  ## Column 2 — Battery Thresholds & Sensors
+  ###########################################################################
+
+  - type: entities
+    view_layout:
+      column: 2
+    title: "Global Threshold"
+    entities:
+      - entity: input_number.device_alerts_battery_threshold
+        name: "Alert when battery below (%)"
+
+  - type: custom:auto-entities
+    view_layout:
+      column: 2
+    card:
+      type: entities
+      title: "All Battery Sensors (current levels)"
+    filter:
+      include:
+        - attributes:
+            device_class: battery
+      exclude:
+        - state: unavailable
+    sort:
+      method: state
+      numeric: true
+      reverse: false
+    show_empty: false
+
+  ###########################################################################
+  ## Column 3 — Ignore Lists, Overrides & Notification Settings
+  ###########################################################################
+
+  - type: markdown
+    view_layout:
+      column: 3
+    content: "## Ignore Lists"
+
+  - type: markdown
+    view_layout:
+      column: 3
+    content: >
+      **Pattern format:** comma-separated glob patterns matching entity IDs.
+      Examples: `*plex*`, `sensor.my_device_*`, `sensor.my_sensor_battery`
+
+      **UUID format:** comma-separated HA device UUIDs (found in Settings → Devices).
+      Ignoring a UUID suppresses the entire device regardless of entity names.
+
+  - type: entities
+    view_layout:
+      column: 3
+    title: "Ignored Entity Patterns"
+    entities:
+      - entity: input_text.device_alerts_ignore_patterns
+        name: "Glob Patterns (comma-separated)"
+
+  - type: entities
+    view_layout:
+      column: 3
+    title: "Ignored Device UUIDs"
+    entities:
+      - entity: input_text.device_alerts_ignore_uuids
+        name: "Device UUIDs (comma-separated)"
+
+  - type: entities
+    view_layout:
+      column: 3
+    title: "Per-Device Overrides (JSON)"
+    entities:
+      - entity: input_text.device_alerts_battery_thresholds_override
+        name: "JSON map: entity_id → threshold"
+
+  - type: markdown
+    view_layout:
+      column: 3
+    content: >
+      **Override format:** `{"sensor.my_lock_battery": 10, "sensor.my_sensor_battery": 15}`
+
+      Devices not listed use the global threshold above.
+
+  - type: markdown
+    view_layout:
+      column: 3
+    content: "## Notifications"
+
+  - type: entities
+    view_layout:
+      column: 3
+    title: "Notification Services"
+    entities:
+      - entity: input_text.device_alerts_notify_mobile_services
+        name: "Mobile App Services (comma-separated)"
+      - entity: input_text.device_alerts_notify_gate_entity
+        name: "Gate Entity (blank = always notify)"
+      - entity: input_text.device_alerts_smtp_service
+        name: "SMTP Service Name (blank = no email)"
+      - entity: input_text.device_alerts_smtp_targets
+        name: "SMTP Targets (comma-separated)"

@@ -1,0 +1,93 @@
+# Unavailable & Low Battery Alerts — HA Package Helpers
+#
+# Copy this file into your Home Assistant packages/ directory.
+# Ensure your configuration.yaml includes:
+#
+#   homeassistant:
+#     packages: !include_dir_named packages/
+#
+# Then restart Home Assistant to create the helpers.
+
+input_number:
+  device_alerts_battery_threshold:
+    name: "Battery Alert Threshold (global)"
+    initial: 20
+    min: 5
+    max: 100
+    step: 5
+    unit_of_measurement: "%"
+    icon: mdi:battery-alert
+
+input_text:
+  device_alerts_battery_thresholds_override:
+    name: "Battery Thresholds: Per-Device Overrides (JSON)"
+    # Format: {"sensor.my_lock_battery": 10, "sensor.my_sensor_battery": 15}
+    # Devices not listed use the global threshold above.
+    initial: "{}"
+    max: 1024
+    icon: mdi:code-json
+
+  device_alerts_ignore_patterns:
+    name: "Device Alert Ignore: Entity Glob Patterns"
+    # Comma-separated glob patterns matching entity IDs.
+    # Examples: *plex*, sensor.my_device_*, sensor.my_sensor_battery
+    initial: ""
+    max: 1024
+    icon: mdi:regex
+
+  device_alerts_ignore_uuids:
+    name: "Device Alert Ignore: Device UUIDs"
+    # Comma-separated HA device UUIDs (found in Settings → Devices → device info).
+    # Ignoring a UUID suppresses the entire device regardless of entity names.
+    initial: ""
+    max: 1024
+    icon: mdi:identifier
+
+  device_alerts_notify_mobile_services:
+    name: "Notifications: Mobile App Services"
+    # Comma-separated notify service names.
+    # Example: mobile_app_my_phone, mobile_app_partners_phone
+    initial: ""
+    max: 255
+    icon: mdi:cellphone-message
+
+  device_alerts_notify_gate_entity:
+    name: "Notifications: Gate Entity"
+    # Entity that must be 'on' before notifications are sent.
+    # Leave blank to always notify regardless of state.
+    # Example: input_boolean.im_home
+    initial: ""
+    max: 255
+    icon: mdi:bell-lock
+
+  device_alerts_smtp_service:
+    name: "Notifications: SMTP Service Name"
+    # The notify service name for email notifications.
+    # Leave blank to skip email notifications entirely.
+    # Example: smtp
+    initial: ""
+    max: 64
+    icon: mdi:email-outline
+
+  device_alerts_smtp_targets:
+    name: "Notifications: SMTP Target Addresses"
+    # Comma-separated email or SMS gateway addresses.
+    # Only used when the SMTP service name above is set.
+    initial: ""
+    max: 255
+    icon: mdi:email-multiple-outline
+
+input_select:
+  device_alerts_snooze_target:
+    name: "Snooze Target"
+    # Populated automatically by the integration — do not edit manually.
+    options:
+      - "(none)"
+    icon: mdi:target
+
+input_datetime:
+  device_alerts_snooze_until:
+    name: "Snooze Until"
+    has_date: true
+    has_time: true
+    icon: mdi:calendar-clock

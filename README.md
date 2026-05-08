@@ -110,4 +110,4 @@ If you use Z-Wave JS, the integration automatically sends an immediate push noti
 
 ## License
 
-MIT
+[AGPL-3.0](LICENSE)
