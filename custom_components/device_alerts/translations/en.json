@@ -1,0 +1,45 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Unavailable & Low Battery Alerts",
+        "description": "Configure notification services. All fields are optional — you can also set or change these later via the Lovelace dashboard.",
+        "data": {
+          "mobile_services": "Mobile notify services",
+          "smtp_service": "SMTP notify service name",
+          "smtp_targets": "SMTP target addresses",
+          "gate_entity": "Notification gate entity"
+        },
+        "data_description": {
+          "mobile_services": "Comma-separated service names, e.g. mobile_app_my_phone, mobile_app_partners_phone",
+          "smtp_service": "Leave blank to skip email, e.g. smtp",
+          "smtp_targets": "Comma-separated addresses, e.g. user@example.com",
+          "gate_entity": "Entity that must be 'on' before notifications send; leave blank to always notify, e.g. input_boolean.im_home"
+        }
+      }
+    },
+    "abort": {
+      "already_configured": "Unavailable & Low Battery Alerts is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Notification Settings",
+        "description": "Update notification configuration. Changes are applied on the next check.",
+        "data": {
+          "mobile_services": "Mobile notify services",
+          "smtp_service": "SMTP notify service name",
+          "smtp_targets": "SMTP target addresses",
+          "gate_entity": "Notification gate entity"
+        },
+        "data_description": {
+          "mobile_services": "Comma-separated service names, e.g. mobile_app_my_phone",
+          "smtp_service": "Leave blank to skip email, e.g. smtp",
+          "smtp_targets": "Comma-separated addresses, e.g. user@example.com",
+          "gate_entity": "Entity that must be 'on' before notifications send; leave blank to always notify"
+        }
+      }
+    }
+  }
+}

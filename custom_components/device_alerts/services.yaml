@@ -1,0 +1,75 @@
+run_check:
+  name: Run Check Now
+  description: Trigger an immediate device availability and battery check.
+
+add_snooze:
+  name: Add / Update Snooze
+  description: >
+    Add or update a snooze entry using the UI helpers
+    (input_select.device_alerts_snooze_target and input_datetime.device_alerts_snooze_until).
+
+clear_snooze:
+  name: Clear Snooze
+  description: >
+    Remove the snooze entry for the device or sensor currently selected in
+    input_select.device_alerts_snooze_target.
+
+quick_snooze:
+  name: Quick Snooze
+  description: Snooze an alert for a specified number of days.
+  fields:
+    uuid:
+      name: Device UUID or entity ID
+      description: >
+        The HA device UUID (for unavailability alerts) or entity ID
+        (for battery alerts) to snooze.
+      required: true
+      selector:
+        text:
+    days:
+      name: Days
+      description: Number of days to snooze (1–365). Defaults to 7.
+      required: false
+      default: 7
+      selector:
+        number:
+          min: 1
+          max: 365
+          mode: box
+
+quick_ignore:
+  name: Quick Ignore
+  description: Permanently ignore a device by adding its UUID to the ignore list.
+  fields:
+    uuid:
+      name: Device UUID
+      description: The HA device UUID to permanently ignore.
+      required: true
+      selector:
+        text:
+
+set_battery_threshold:
+  name: Set Battery Threshold
+  description: >
+    Set a per-device battery threshold override.
+    Pass threshold=0 to reset the device to the global default.
+  fields:
+    entity_id:
+      name: Battery sensor entity ID
+      description: The entity ID of the battery sensor to configure.
+      required: true
+      selector:
+        entity:
+          device_class: battery
+    threshold:
+      name: Threshold (%)
+      description: >
+        Battery percentage at or below which an alert fires.
+        Use 0 to reset to the global default.
+      required: true
+      selector:
+        number:
+          min: 0
+          max: 100
+          unit_of_measurement: "%"
+          mode: slider
