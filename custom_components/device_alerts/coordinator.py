@@ -83,14 +83,17 @@ class DeviceAlertsCoordinator(DataUpdateCoordinator):
             _LOGGER.warning("device_alerts: invalid JSON in battery_thresholds_override — ignoring")
             threshold_overrides = {}
 
+        def _strip_notify_prefix(svc: str) -> str:
+            return svc[len("notify."):] if svc.startswith("notify.") else svc
+
         return {
             "ignore_patterns":     [p.strip() for p in raw_patterns.split(",") if p.strip()],
             "ignore_uuids":        {u.strip() for u in raw_uuids.split(",") if u.strip()},
             "global_threshold":    global_thresh,
             "threshold_overrides": threshold_overrides,
-            "mobile_services":     [s.strip() for s in raw_mobile.split(",") if s.strip()],
+            "mobile_services":     [_strip_notify_prefix(s.strip()) for s in raw_mobile.split(",") if s.strip()],
             "gate_entity":         gate_entity,
-            "smtp_service":        smtp_service,
+            "smtp_service":        smtp_service and _strip_notify_prefix(smtp_service),
             "smtp_targets":        [t.strip() for t in raw_smtp_tgts.split(",") if t.strip()],
         }
 
@@ -287,8 +290,11 @@ class DeviceAlertsCoordinator(DataUpdateCoordinator):
             unavail, battery, cleaned_snoozed = self._run_checks(snoozed)
             await self.hass.async_add_executor_job(self._write_snooze_sync, cleaned_snoozed)
             await self._async_update_snooze_dropdown(unavail, battery)
-            cfg = self._read_config()
-            await self._async_fire_notifications(unavail, battery, cfg)
+            try:
+                cfg = self._read_config()
+                await self._async_fire_notifications(unavail, battery, cfg)
+            except Exception as notify_exc:  # noqa: BLE001
+                _LOGGER.error("device_alerts: notification error (sensor data still updated): %s", notify_exc)
             return {"unavail": unavail, "battery": battery}
         except Exception as exc:
             raise UpdateFailed(f"device_alerts check failed: {exc}") from exc
