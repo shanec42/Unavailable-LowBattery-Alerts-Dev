@@ -306,13 +306,16 @@ class DeviceAlertsCoordinator(DataUpdateCoordinator):
         device_name = (
             new_state.attributes.get("friendly_name", entity_id) if new_state else entity_id
         )
-        await self._async_send_notifications(
-            "Z-Wave Device Dead",
-            (f"Device offline: {device_name}\n"
-             "Node status changed to 'dead'.\n"
-             "Check battery and Z-Wave connection."),
-            cfg,
-        )
+        try:
+            await self._async_send_notifications(
+                "Z-Wave Device Dead",
+                (f"Device offline: {device_name}\n"
+                 "Node status changed to 'dead'.\n"
+                 "Check battery and Z-Wave connection."),
+                cfg,
+            )
+        except Exception as exc:  # noqa: BLE001
+            _LOGGER.error("device_alerts: Z-Wave notification error: %s", exc)
 
     # ---- Service handlers ----------------------------------------------------
 
