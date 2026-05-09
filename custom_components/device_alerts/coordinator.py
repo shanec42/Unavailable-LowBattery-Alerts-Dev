@@ -1,3 +1,4 @@
+# 2026/05/08 - Phase 8: migrate ignore_patterns/ignore_uuids/threshold_overrides from input_text to config.json
 from __future__ import annotations
 
 import datetime
@@ -33,6 +34,7 @@ class DeviceAlertsCoordinator(DataUpdateCoordinator):
         super().__init__(hass, _LOGGER, name=DOMAIN, update_interval=UPDATE_INTERVAL)
         self.entry = entry
         self._snooze_file = Path(hass.config.path(f"custom_components/{DOMAIN}/snooze.json"))
+        self._config_file = Path(hass.config.path(f"custom_components/{DOMAIN}/config.json"))
         self._silent_refresh = False
 
     # ---- File I/O (blocking, run in executor) ---------------------------------
@@ -52,6 +54,57 @@ class DeviceAlertsCoordinator(DataUpdateCoordinator):
         except OSError as exc:
             _LOGGER.error("device_alerts: could not write snooze file: %s", exc)
 
+    def _read_config_json_sync(self) -> dict:
+        try:
+            data = json.loads(self._config_file.read_text())
+            if isinstance(data, dict):
+                return data
+        except FileNotFoundError:
+            pass
+        except (json.JSONDecodeError, OSError):
+            _LOGGER.warning("device_alerts: corrupt config.json — treating as empty")
+        return {}
+
+    def _write_config_json_sync(self, data: dict) -> None:
+        try:
+            self._config_file.write_text(json.dumps(data, indent=2))
+        except OSError as exc:
+            _LOGGER.error("device_alerts: could not write config.json: %s", exc)
+
+    # ---- One-time migration from input_text to config.json -------------------
+
+    async def async_migrate_to_config_json(self) -> None:
+        """Migrate ignore/threshold settings from input_text helpers to config.json.
+
+        Reads current input_text values once and writes them into config.json.
+        Only runs when config.json is missing the expected keys.
+        """
+        existing = await self.hass.async_add_executor_job(self._read_config_json_sync)
+        if all(k in existing for k in ("ignore_patterns", "ignore_uuids", "threshold_overrides")):
+            return  # Already migrated
+
+        cfg = dict(existing)
+        if "ignore_patterns" not in cfg:
+            raw = self._get_helper("input_text.device_alerts_ignore_patterns")
+            cfg["ignore_patterns"] = [p.strip() for p in raw.split(",") if p.strip()]
+
+        if "ignore_uuids" not in cfg:
+            raw = self._get_helper("input_text.device_alerts_ignore_uuids")
+            cfg["ignore_uuids"] = [u.strip() for u in raw.split(",") if u.strip()]
+
+        if "threshold_overrides" not in cfg:
+            raw = self._get_helper("input_text.device_alerts_battery_thresholds_override", "{}")
+            try:
+                overrides = json.loads(raw)
+                if not isinstance(overrides, dict):
+                    overrides = {}
+            except (json.JSONDecodeError, ValueError):
+                overrides = {}
+            cfg["threshold_overrides"] = overrides
+
+        await self.hass.async_add_executor_job(self._write_config_json_sync, cfg)
+        _LOGGER.info("device_alerts: migrated config from input_text helpers to config.json")
+
     # ---- Config reading -------------------------------------------------------
 
     def _get_helper(self, entity_id: str, default: str = "") -> str:
@@ -60,10 +113,14 @@ class DeviceAlertsCoordinator(DataUpdateCoordinator):
             return default
         return state.state
 
-    def _read_config(self) -> dict:
-        raw_patterns  = self._get_helper("input_text.device_alerts_ignore_patterns")
-        raw_uuids     = self._get_helper("input_text.device_alerts_ignore_uuids")
-        raw_overrides = self._get_helper("input_text.device_alerts_battery_thresholds_override", "{}")
+    def _read_config(self, cfg_json: dict) -> dict:
+        """Build runtime config from pre-loaded config.json + input_text notify helpers."""
+        ignore_patterns = cfg_json.get("ignore_patterns", [])
+        ignore_uuids = set(cfg_json.get("ignore_uuids", []))
+        threshold_overrides = cfg_json.get("threshold_overrides", {})
+        if not isinstance(threshold_overrides, dict):
+            threshold_overrides = {}
+
         raw_mobile    = self._get_helper("input_text.device_alerts_notify_mobile_services")
         gate_entity   = self._get_helper("input_text.device_alerts_notify_gate_entity").strip() or None
         smtp_service  = self._get_helper("input_text.device_alerts_smtp_service").strip() or None
@@ -76,20 +133,12 @@ class DeviceAlertsCoordinator(DataUpdateCoordinator):
         except (ValueError, TypeError):
             global_thresh = 20
 
-        try:
-            threshold_overrides = json.loads(raw_overrides)
-            if not isinstance(threshold_overrides, dict):
-                threshold_overrides = {}
-        except (json.JSONDecodeError, ValueError):
-            _LOGGER.warning("device_alerts: invalid JSON in battery_thresholds_override — ignoring")
-            threshold_overrides = {}
-
         def _strip_notify_prefix(svc: str) -> str:
             return svc[len("notify."):] if svc.startswith("notify.") else svc
 
         return {
-            "ignore_patterns":     [p.strip() for p in raw_patterns.split(",") if p.strip()],
-            "ignore_uuids":        {u.strip() for u in raw_uuids.split(",") if u.strip()},
+            "ignore_patterns":     ignore_patterns,
+            "ignore_uuids":        ignore_uuids,
             "global_threshold":    global_thresh,
             "threshold_overrides": threshold_overrides,
             "mobile_services":     [_strip_notify_prefix(s.strip()) for s in raw_mobile.split(",") if s.strip()],
@@ -127,10 +176,10 @@ class DeviceAlertsCoordinator(DataUpdateCoordinator):
 
     # ---- Core check logic (runs in event loop — no blocking I/O) -------------
 
-    def _run_checks(self, snoozed: dict) -> tuple[dict, dict, dict]:
+    def _run_checks(self, snoozed: dict, cfg_json: dict) -> tuple[dict, dict, dict]:
         er = entity_registry.async_get(self.hass)
         dr = device_registry.async_get(self.hass)
-        cfg = self._read_config()
+        cfg = self._read_config(cfg_json)
         ignore_uuids        = cfg["ignore_uuids"]
         ignore_patterns     = cfg["ignore_patterns"]
         global_threshold    = cfg["global_threshold"]
@@ -288,24 +337,34 @@ class DeviceAlertsCoordinator(DataUpdateCoordinator):
     async def _async_update_data(self) -> dict:
         try:
             snoozed = await self.hass.async_add_executor_job(self._read_snooze_sync)
-            unavail, battery, cleaned_snoozed = self._run_checks(snoozed)
+            cfg_json = await self.hass.async_add_executor_job(self._read_config_json_sync)
+            unavail, battery, cleaned_snoozed = self._run_checks(snoozed, cfg_json)
             await self.hass.async_add_executor_job(self._write_snooze_sync, cleaned_snoozed)
             await self._async_update_snooze_dropdown(unavail, battery)
             if not self._silent_refresh:
                 try:
-                    cfg = self._read_config()
+                    cfg = self._read_config(cfg_json)
                     await self._async_fire_notifications(unavail, battery, cfg)
                 except Exception as notify_exc:  # noqa: BLE001
                     _LOGGER.error("device_alerts: notification error (sensor data still updated): %s", notify_exc)
             self._silent_refresh = False
-            return {"unavail": unavail, "battery": battery}
+            return {
+                "unavail": unavail,
+                "battery": battery,
+                "config": {
+                    "ignore_patterns":    cfg_json.get("ignore_patterns", []),
+                    "ignore_uuids":      list(cfg_json.get("ignore_uuids", [])),
+                    "threshold_overrides": cfg_json.get("threshold_overrides", {}),
+                },
+            }
         except Exception as exc:
             raise UpdateFailed(f"device_alerts check failed: {exc}") from exc
 
     # ---- Z-Wave dead node ----------------------------------------------------
 
     async def async_handle_zwave_dead(self, entity_id: str, new_state) -> None:
-        cfg = self._read_config()
+        cfg_json = await self.hass.async_add_executor_job(self._read_config_json_sync)
+        cfg = self._read_config(cfg_json)
         device_name = (
             new_state.attributes.get("friendly_name", entity_id) if new_state else entity_id
         )
@@ -386,22 +445,14 @@ class DeviceAlertsCoordinator(DataUpdateCoordinator):
         if not uuid:
             _LOGGER.warning("device_alerts_quick_ignore: no valid uuid provided")
             return
-        current_state = self.hass.states.get("input_text.device_alerts_ignore_uuids")
-        current = current_state.state if current_state and current_state.state not in ("unknown", "unavailable") else ""
-        existing = {u.strip() for u in current.split(",") if u.strip()}
-        if uuid in existing:
+        cfg_json = await self.hass.async_add_executor_job(self._read_config_json_sync)
+        uuids = cfg_json.get("ignore_uuids", [])
+        if uuid in uuids:
             _LOGGER.info("device_alerts: %s already ignored", uuid)
             return
-        existing.add(uuid)
-        new_value = ",".join(sorted(existing))
-        if len(new_value) > 1000:
-            _LOGGER.warning("device_alerts_quick_ignore: ignore_uuids would exceed 1000 chars — skipping")
-            return
-        await self.hass.services.async_call(
-            "input_text", "set_value",
-            {"entity_id": "input_text.device_alerts_ignore_uuids", "value": new_value},
-            blocking=True,
-        )
+        uuids.append(uuid)
+        cfg_json["ignore_uuids"] = uuids
+        await self.hass.async_add_executor_job(self._write_config_json_sync, cfg_json)
         _LOGGER.info("device_alerts: quick-ignored %s", uuid)
         await self.async_refresh_silent()
 
@@ -410,33 +461,63 @@ class DeviceAlertsCoordinator(DataUpdateCoordinator):
         if not entity_id or "." not in entity_id:
             _LOGGER.warning("set_battery_threshold: invalid entity_id")
             return
-        current_state = self.hass.states.get("input_text.device_alerts_battery_thresholds_override")
-        raw = (current_state.state
-               if current_state and current_state.state not in ("unknown", "unavailable", "")
-               else "{}")
-        try:
-            overrides = json.loads(raw)
-            if not isinstance(overrides, dict):
-                overrides = {}
-        except (json.JSONDecodeError, ValueError):
-            overrides = {}
         try:
             thresh = max(0, min(100, int(threshold))) if threshold is not None else 0
         except (ValueError, TypeError):
             thresh = 0
+        cfg_json = await self.hass.async_add_executor_job(self._read_config_json_sync)
+        overrides = cfg_json.get("threshold_overrides", {})
+        if not isinstance(overrides, dict):
+            overrides = {}
         if thresh <= 0:
             overrides.pop(entity_id, None)
             _LOGGER.info("set_battery_threshold: reset %s to global default", entity_id)
         else:
             overrides[entity_id] = thresh
             _LOGGER.info("set_battery_threshold: set %s to %d%%", entity_id, thresh)
-        new_value = json.dumps(overrides)
-        if len(new_value) > 1000:
-            _LOGGER.warning("set_battery_threshold: overrides JSON would exceed 1000 chars — skipping")
+        cfg_json["threshold_overrides"] = overrides
+        await self.hass.async_add_executor_job(self._write_config_json_sync, cfg_json)
+        await self.async_refresh_silent()
+
+    async def async_add_ignore_pattern(self, pattern: str) -> None:
+        pattern = pattern.strip()
+        if not pattern or len(pattern) > 200:
+            _LOGGER.warning("add_ignore_pattern: empty or too-long pattern")
             return
-        await self.hass.services.async_call(
-            "input_text", "set_value",
-            {"entity_id": "input_text.device_alerts_battery_thresholds_override", "value": new_value},
-            blocking=True,
-        )
+        cfg_json = await self.hass.async_add_executor_job(self._read_config_json_sync)
+        patterns = cfg_json.get("ignore_patterns", [])
+        if pattern in patterns:
+            _LOGGER.info("device_alerts: pattern already in ignore list: %s", pattern)
+            return
+        patterns.append(pattern)
+        cfg_json["ignore_patterns"] = patterns
+        await self.hass.async_add_executor_job(self._write_config_json_sync, cfg_json)
+        _LOGGER.info("device_alerts: added ignore pattern: %s", pattern)
+        await self.async_refresh_silent()
+
+    async def async_remove_ignore_pattern(self, pattern: str) -> None:
+        pattern = pattern.strip()
+        cfg_json = await self.hass.async_add_executor_job(self._read_config_json_sync)
+        patterns = cfg_json.get("ignore_patterns", [])
+        if pattern not in patterns:
+            return
+        patterns.remove(pattern)
+        cfg_json["ignore_patterns"] = patterns
+        await self.hass.async_add_executor_job(self._write_config_json_sync, cfg_json)
+        _LOGGER.info("device_alerts: removed ignore pattern: %s", pattern)
+        await self.async_refresh_silent()
+
+    async def async_remove_ignore_uuid(self, uuid: str) -> None:
+        uuid = validate_key(uuid)
+        if not uuid:
+            _LOGGER.warning("remove_ignore_uuid: invalid uuid")
+            return
+        cfg_json = await self.hass.async_add_executor_job(self._read_config_json_sync)
+        uuids = cfg_json.get("ignore_uuids", [])
+        if uuid not in uuids:
+            return
+        uuids.remove(uuid)
+        cfg_json["ignore_uuids"] = uuids
+        await self.hass.async_add_executor_job(self._write_config_json_sync, cfg_json)
+        _LOGGER.info("device_alerts: removed ignore UUID: %s", uuid)
         await self.async_refresh_silent()

@@ -1,3 +1,4 @@
+# 2026/05/08 - Phase 8: add migration call; register add/remove_ignore_pattern, remove_ignore_uuid services
 from __future__ import annotations
 
 import logging
@@ -20,6 +21,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # Pre-populate notify helpers from config entry if they are empty
     await _prepopulate_helpers(hass, entry.data)
+
+    # One-time migration: move ignore_patterns/ignore_uuids/threshold_overrides to config.json
+    await coordinator.async_migrate_to_config_json()
 
     # Register services (only on first entry — services are domain-global)
     if not hass.services.has_service(DOMAIN, "run_check"):
@@ -56,8 +60,11 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         hass.data[DOMAIN].pop(entry.entry_id, None)
         # Remove services only when last entry is gone
         if not hass.data.get(DOMAIN):
-            for svc in ("run_check", "add_snooze", "clear_snooze",
-                        "quick_snooze", "quick_ignore", "set_battery_threshold"):
+            for svc in (
+                "run_check", "add_snooze", "clear_snooze",
+                "quick_snooze", "quick_ignore", "set_battery_threshold",
+                "add_ignore_pattern", "remove_ignore_pattern", "remove_ignore_uuid",
+            ):
                 hass.services.async_remove(DOMAIN, svc)
     return unload_ok
 
@@ -114,6 +121,15 @@ def _register_services(hass: HomeAssistant, coordinator: DeviceAlertsCoordinator
             threshold=call.data.get("threshold"),
         )
 
+    async def handle_add_ignore_pattern(call: ServiceCall) -> None:
+        await coordinator.async_add_ignore_pattern(pattern=call.data.get("pattern", ""))
+
+    async def handle_remove_ignore_pattern(call: ServiceCall) -> None:
+        await coordinator.async_remove_ignore_pattern(pattern=call.data.get("pattern", ""))
+
+    async def handle_remove_ignore_uuid(call: ServiceCall) -> None:
+        await coordinator.async_remove_ignore_uuid(uuid=call.data.get("uuid", ""))
+
     hass.services.async_register(DOMAIN, "run_check", handle_run_check)
     hass.services.async_register(DOMAIN, "add_snooze", handle_add_snooze)
     hass.services.async_register(DOMAIN, "clear_snooze", handle_clear_snooze)
@@ -138,4 +154,16 @@ def _register_services(hass: HomeAssistant, coordinator: DeviceAlertsCoordinator
                 vol.Coerce(int), vol.Range(min=0, max=100)
             ),
         }),
+    )
+    hass.services.async_register(
+        DOMAIN, "add_ignore_pattern", handle_add_ignore_pattern,
+        schema=vol.Schema({vol.Required("pattern"): cv.string}),
+    )
+    hass.services.async_register(
+        DOMAIN, "remove_ignore_pattern", handle_remove_ignore_pattern,
+        schema=vol.Schema({vol.Required("pattern"): cv.string}),
+    )
+    hass.services.async_register(
+        DOMAIN, "remove_ignore_uuid", handle_remove_ignore_uuid,
+        schema=vol.Schema({vol.Required("uuid"): cv.string}),
     )

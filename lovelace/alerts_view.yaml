@@ -264,43 +264,111 @@ cards:
     view_layout:
       column: 3
     content: >
-      **Pattern format:** comma-separated glob patterns matching entity IDs.
-      Examples: `*plex*`, `sensor.my_device_*`, `sensor.my_sensor_battery`
+      Settings are stored in `config.json` (no 255-character limit).
+      Use the buttons below to add or remove entries.
+      Use the **Ignore** button on each unavailable device to add its UUID directly.
 
-      **UUID format:** comma-separated HA device UUIDs (found in Settings → Devices).
-      Ignoring a UUID suppresses the entire device regardless of entity names.
+  # ---- Ignore Patterns: current list with Remove buttons --------------------
+
+  - type: custom:config-template-card
+    view_layout:
+      column: 3
+    entities:
+      - sensor.device_alerts_config
+    card:
+      type: vertical-stack
+      cards: >-
+        ${(function(){
+          var patterns=(states['sensor.device_alerts_config']
+            &&states['sensor.device_alerts_config'].attributes
+            &&states['sensor.device_alerts_config'].attributes.ignore_patterns)||[];
+          var header=[{type:'markdown',content:'### Entity Glob Patterns'}];
+          if(patterns.length===0){
+            return header.concat([{type:'markdown',content:'*No patterns configured.*'}]);
+          }
+          return header.concat(patterns.map(function(p){
+            return{
+              type:'horizontal-stack',
+              cards:[
+                {type:'markdown',content:'`'+p+'`'},
+                {show_name:true,show_icon:false,type:'button',name:'Remove',
+                 tap_action:{action:'call-service',
+                   service:'device_alerts.remove_ignore_pattern',
+                   service_data:{pattern:p}}}
+              ]
+            };
+          }));
+        })()}
+
+  # ---- Ignore Patterns: add new entry ----------------------------------------
 
   - type: entities
     view_layout:
       column: 3
-    title: "Ignored Entity Patterns"
+    title: "Add Ignore Pattern"
     entities:
-      - entity: input_text.device_alerts_ignore_patterns
-        name: "Glob Patterns (comma-separated)"
+      - entity: input_text.device_alerts_pattern_input
+        name: "Glob pattern (e.g. *plex*, sensor.my_device_*)"
 
-  - type: entities
+  - type: custom:config-template-card
     view_layout:
       column: 3
-    title: "Ignored Device UUIDs"
     entities:
-      - entity: input_text.device_alerts_ignore_uuids
-        name: "Device UUIDs (comma-separated)"
+      - input_text.device_alerts_pattern_input
+    card:
+      type: button
+      name: "Add Pattern"
+      icon: mdi:plus-circle
+      icon_height: 30px
+      tap_action:
+        action: call-service
+        service: device_alerts.add_ignore_pattern
+        service_data:
+          pattern: ${states['input_text.device_alerts_pattern_input'].state}
 
-  - type: entities
+  # ---- Ignored UUIDs: current list with Remove buttons ----------------------
+
+  - type: custom:config-template-card
     view_layout:
       column: 3
-    title: "Per-Device Overrides (JSON)"
     entities:
-      - entity: input_text.device_alerts_battery_thresholds_override
-        name: "JSON map: entity_id → threshold"
+      - sensor.device_alerts_config
+    card:
+      type: vertical-stack
+      cards: >-
+        ${(function(){
+          var uuids=(states['sensor.device_alerts_config']
+            &&states['sensor.device_alerts_config'].attributes
+            &&states['sensor.device_alerts_config'].attributes.ignore_uuids)||[];
+          var header=[{type:'markdown',content:'### Ignored Device UUIDs'}];
+          if(uuids.length===0){
+            return header.concat([{type:'markdown',
+              content:'*No devices ignored. Use the **Ignore** button on each device above.*'}]);
+          }
+          return header.concat(uuids.map(function(u){
+            return{
+              type:'horizontal-stack',
+              cards:[
+                {type:'markdown',content:'`'+u+'`'},
+                {show_name:true,show_icon:false,type:'button',name:'Remove',
+                 tap_action:{action:'call-service',
+                   service:'device_alerts.remove_ignore_uuid',
+                   service_data:{uuid:u}}}
+              ]
+            };
+          }));
+        })()}
+
+  # ---- Per-device thresholds note -------------------------------------------
 
   - type: markdown
     view_layout:
       column: 3
     content: >
-      **Override format:** `{"sensor.my_lock_battery": 10, "sensor.my_sensor_battery": 15}`
+      **Per-device battery thresholds** are set using the threshold buttons inside each
+      Low Battery entry above. They are saved to `config.json` and survive restarts.
 
-      Devices not listed use the global threshold above.
+  # ---- Notifications --------------------------------------------------------
 
   - type: markdown
     view_layout:
@@ -317,6 +385,6 @@ cards:
       - entity: input_text.device_alerts_notify_gate_entity
         name: "Gate Entity (blank = always notify)"
       - entity: input_text.device_alerts_smtp_service
-        name: "SMTP Service Name (blank = no email)"
+        name: "Email Notify Service (blank = no email)"
       - entity: input_text.device_alerts_smtp_targets
         name: "SMTP Targets (comma-separated)"

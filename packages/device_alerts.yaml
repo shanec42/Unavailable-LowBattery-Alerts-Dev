@@ -7,6 +7,10 @@
 #     packages: !include_dir_named packages/
 #
 # Then restart Home Assistant to create the helpers.
+#
+# NOTE: ignore_patterns, ignore_uuids, and battery_thresholds_override are stored
+# in custom_components/device_alerts/config.json rather than input_text helpers.
+# Use the Lovelace dashboard or Developer Tools → Services to manage them.
 
 input_number:
   device_alerts_battery_threshold:
@@ -19,29 +23,14 @@ input_number:
     icon: mdi:battery-alert
 
 input_text:
-  device_alerts_battery_thresholds_override:
-    name: "Battery Thresholds: Per-Device Overrides (JSON)"
-    # Format: {"sensor.my_lock_battery": 10, "sensor.my_sensor_battery": 15}
-    # Devices not listed use the global threshold above.
-    initial: "{}"
-    max: 255
-    icon: mdi:code-json
-
-  device_alerts_ignore_patterns:
-    name: "Device Alert Ignore: Entity Glob Patterns"
-    # Comma-separated glob patterns matching entity IDs.
-    # Examples: *plex*, sensor.my_device_*, sensor.my_sensor_battery
+  device_alerts_pattern_input:
+    name: "Device Alerts: Pattern Entry Field"
+    # Temporary text field used by the Lovelace dashboard to enter a new ignore pattern.
+    # Type a glob pattern here, then click "Add Pattern" to save it.
+    # Example: *plex*    or    sensor.my_device_*
     initial: ""
     max: 255
     icon: mdi:regex
-
-  device_alerts_ignore_uuids:
-    name: "Device Alert Ignore: Device UUIDs"
-    # Comma-separated HA device UUIDs (found in Settings → Devices → device info).
-    # Ignoring a UUID suppresses the entire device regardless of entity names.
-    initial: ""
-    max: 255
-    icon: mdi:identifier
 
   device_alerts_notify_mobile_services:
     name: "Notifications: Mobile App Services"

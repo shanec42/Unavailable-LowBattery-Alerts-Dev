@@ -73,3 +73,40 @@ set_battery_threshold:
           max: 100
           unit_of_measurement: "%"
           mode: slider
+
+add_ignore_pattern:
+  name: Add Ignore Pattern
+  description: >
+    Add a glob pattern to the ignore list.
+    Entities whose IDs match the pattern will be excluded from all checks.
+    Examples: *plex*, sensor.my_device_*, sensor.my_sensor_battery
+  fields:
+    pattern:
+      name: Glob Pattern
+      description: >
+        An entity ID glob pattern to ignore (e.g. *plex*, sensor.my_device_*).
+      required: true
+      selector:
+        text:
+
+remove_ignore_pattern:
+  name: Remove Ignore Pattern
+  description: Remove a glob pattern from the ignore list.
+  fields:
+    pattern:
+      name: Glob Pattern
+      description: The exact pattern string to remove.
+      required: true
+      selector:
+        text:
+
+remove_ignore_uuid:
+  name: Remove Ignored UUID
+  description: Remove a device UUID from the ignore list, re-enabling alerts for that device.
+  fields:
+    uuid:
+      name: Device UUID
+      description: The HA device UUID to stop ignoring.
+      required: true
+      selector:
+        text:
