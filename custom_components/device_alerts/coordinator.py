@@ -33,6 +33,7 @@ class DeviceAlertsCoordinator(DataUpdateCoordinator):
         super().__init__(hass, _LOGGER, name=DOMAIN, update_interval=UPDATE_INTERVAL)
         self.entry = entry
         self._snooze_file = Path(hass.config.path(f"custom_components/{DOMAIN}/snooze.json"))
+        self._silent_refresh = False
 
     # ---- File I/O (blocking, run in executor) ---------------------------------
 
@@ -290,11 +291,13 @@ class DeviceAlertsCoordinator(DataUpdateCoordinator):
             unavail, battery, cleaned_snoozed = self._run_checks(snoozed)
             await self.hass.async_add_executor_job(self._write_snooze_sync, cleaned_snoozed)
             await self._async_update_snooze_dropdown(unavail, battery)
-            try:
-                cfg = self._read_config()
-                await self._async_fire_notifications(unavail, battery, cfg)
-            except Exception as notify_exc:  # noqa: BLE001
-                _LOGGER.error("device_alerts: notification error (sensor data still updated): %s", notify_exc)
+            if not self._silent_refresh:
+                try:
+                    cfg = self._read_config()
+                    await self._async_fire_notifications(unavail, battery, cfg)
+                except Exception as notify_exc:  # noqa: BLE001
+                    _LOGGER.error("device_alerts: notification error (sensor data still updated): %s", notify_exc)
+            self._silent_refresh = False
             return {"unavail": unavail, "battery": battery}
         except Exception as exc:
             raise UpdateFailed(f"device_alerts check failed: {exc}") from exc
@@ -316,6 +319,11 @@ class DeviceAlertsCoordinator(DataUpdateCoordinator):
             )
         except Exception as exc:  # noqa: BLE001
             _LOGGER.error("device_alerts: Z-Wave notification error: %s", exc)
+
+    async def async_refresh_silent(self) -> None:
+        """Refresh sensor data without firing notifications (used by button actions)."""
+        self._silent_refresh = True
+        await super().async_refresh()
 
     # ---- Service handlers ----------------------------------------------------
 
@@ -342,7 +350,7 @@ class DeviceAlertsCoordinator(DataUpdateCoordinator):
         snoozed_map[key] = dt.isoformat()
         await self.hass.async_add_executor_job(self._write_snooze_sync, snoozed_map)
         _LOGGER.info("device_alerts: snoozed %s until %s", key, dt.isoformat())
-        await self.async_refresh()
+        await self.async_refresh_silent()
 
     async def async_clear_snooze(self) -> None:
         state = self.hass.states.get("input_select.device_alerts_snooze_target")
@@ -358,7 +366,7 @@ class DeviceAlertsCoordinator(DataUpdateCoordinator):
         snoozed_map.pop(key, None)
         await self.hass.async_add_executor_job(self._write_snooze_sync, snoozed_map)
         _LOGGER.info("device_alerts: cleared snooze for %s", key)
-        await self.async_refresh()
+        await self.async_refresh_silent()
 
     async def async_quick_snooze(self, uuid: str | None, days: int = 7) -> None:
         uuid = validate_key(uuid)
@@ -371,7 +379,7 @@ class DeviceAlertsCoordinator(DataUpdateCoordinator):
         snoozed_map[uuid] = until.isoformat()
         await self.hass.async_add_executor_job(self._write_snooze_sync, snoozed_map)
         _LOGGER.info("device_alerts: quick-snoozed %s until %s", uuid, until.isoformat())
-        await self.async_refresh()
+        await self.async_refresh_silent()
 
     async def async_quick_ignore(self, uuid: str | None) -> None:
         uuid = validate_key(uuid)
@@ -395,7 +403,7 @@ class DeviceAlertsCoordinator(DataUpdateCoordinator):
             blocking=True,
         )
         _LOGGER.info("device_alerts: quick-ignored %s", uuid)
-        await self.async_refresh()
+        await self.async_refresh_silent()
 
     async def async_set_battery_threshold(self, entity_id: str | None, threshold) -> None:
         entity_id = validate_key(entity_id)
@@ -431,4 +439,4 @@ class DeviceAlertsCoordinator(DataUpdateCoordinator):
             {"entity_id": "input_text.device_alerts_battery_thresholds_override", "value": new_value},
             blocking=True,
         )
-        await self.async_refresh()
+        await self.async_refresh_silent()
