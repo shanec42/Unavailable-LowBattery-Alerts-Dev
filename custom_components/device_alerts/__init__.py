@@ -61,7 +61,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         # Remove services only when last entry is gone
         if not hass.data.get(DOMAIN):
             for svc in (
-                "run_check", "add_snooze", "clear_snooze",
+                "run_check", "add_snooze", "clear_snooze", "unsnooze",
                 "quick_snooze", "quick_ignore", "set_battery_threshold",
                 "add_ignore_pattern", "remove_ignore_pattern", "remove_ignore_uuid",
             ):
@@ -112,6 +112,9 @@ def _register_services(hass: HomeAssistant, coordinator: DeviceAlertsCoordinator
             days=call.data.get("days", 7),
         )
 
+    async def handle_unsnooze(call: ServiceCall) -> None:
+        await coordinator.async_unsnooze(uuid=call.data.get("uuid"))
+
     async def handle_quick_ignore(call: ServiceCall) -> None:
         await coordinator.async_quick_ignore(uuid=call.data.get("uuid"))
 
@@ -144,6 +147,10 @@ def _register_services(hass: HomeAssistant, coordinator: DeviceAlertsCoordinator
     )
     hass.services.async_register(
         DOMAIN, "quick_ignore", handle_quick_ignore,
+        schema=vol.Schema({vol.Required("uuid"): cv.string}),
+    )
+    hass.services.async_register(
+        DOMAIN, "unsnooze", handle_unsnooze,
         schema=vol.Schema({vol.Required("uuid"): cv.string}),
     )
     hass.services.async_register(

@@ -118,11 +118,12 @@ class DeviceAlertsConfigSensor(CoordinatorEntity, SensorEntity):
     @property
     def extra_state_attributes(self) -> dict:
         if self.coordinator.data is None:
-            return {"ignore_patterns": [], "ignore_uuids": [], "threshold_overrides": {}}
+            return {"ignore_patterns": [], "ignore_uuids": [], "ignore_uuid_names": {}, "threshold_overrides": {}}
         cfg = self.coordinator.data.get("config", {})
         return {
             "ignore_patterns":     cfg.get("ignore_patterns", []),
             "ignore_uuids":        cfg.get("ignore_uuids", []),
+            "ignore_uuid_names":   cfg.get("ignore_uuid_names", {}),
             "threshold_overrides": cfg.get("threshold_overrides", {}),
         }
 

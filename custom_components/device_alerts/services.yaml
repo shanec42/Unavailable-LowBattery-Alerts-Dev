@@ -48,6 +48,19 @@ quick_ignore:
       selector:
         text:
 
+unsnooze:
+  name: Unsnooze
+  description: Remove an active snooze for a device or entity, restoring normal alerts immediately.
+  fields:
+    uuid:
+      name: Device UUID or entity ID
+      description: >
+        The HA device UUID (for unavailability alerts) or entity ID
+        (for battery alerts) to unsnooze.
+      required: true
+      selector:
+        text:
+
 set_battery_threshold:
   name: Set Battery Threshold
   description: >

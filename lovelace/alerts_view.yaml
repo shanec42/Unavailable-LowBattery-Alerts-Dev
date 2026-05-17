@@ -79,11 +79,17 @@ cards:
                     cards:[
                       {type:'markdown',content:detail},
                       {type:'horizontal-stack',cards:[
-                        {show_name:true,show_icon:true,type:'button',
-                         name:'Snooze 7 Days',icon:'mdi:sleep',icon_height:'30px',
-                         tap_action:{action:'call-service',
-                           service:'device_alerts.quick_snooze',
-                           service_data:{uuid:uuid}}},
+                        info.snoozed_until
+                          ? {show_name:true,show_icon:true,type:'button',
+                             name:'Unsnooze',icon:'mdi:sleep-off',icon_height:'30px',
+                             tap_action:{action:'call-service',
+                               service:'device_alerts.unsnooze',
+                               service_data:{uuid:uuid}}}
+                          : {show_name:true,show_icon:true,type:'button',
+                             name:'Snooze 7 Days',icon:'mdi:sleep',icon_height:'30px',
+                             tap_action:{action:'call-service',
+                               service:'device_alerts.quick_snooze',
+                               service_data:{uuid:uuid}}},
                         {show_name:true,show_icon:true,type:'button',
                          name:'Ignore',icon:'mdi:eye-off',icon_height:'30px',
                          tap_action:{action:'call-service',
@@ -157,8 +163,11 @@ cards:
                       {type:'horizontal-stack',cards:[
                         {type:'button',name:'Reset',show_name:true,show_icon:true,icon:'mdi:restore',icon_height:'24px',
                          tap_action:{action:'call-service',service:'device_alerts.set_battery_threshold',service_data:{entity_id:eid,threshold:0}}},
-                        {type:'button',name:'Snooze 7 Days',show_name:true,show_icon:true,icon:'mdi:sleep',icon_height:'24px',
-                         tap_action:{action:'call-service',service:'device_alerts.quick_snooze',service_data:{uuid:eid}}}
+                        info.snoozed_until
+                          ? {type:'button',name:'Unsnooze',show_name:true,show_icon:true,icon:'mdi:sleep-off',icon_height:'24px',
+                             tap_action:{action:'call-service',service:'device_alerts.unsnooze',service_data:{uuid:eid}}}
+                          : {type:'button',name:'Snooze 7 Days',show_name:true,show_icon:true,icon:'mdi:sleep',icon_height:'24px',
+                             tap_action:{action:'call-service',service:'device_alerts.quick_snooze',service_data:{uuid:eid}}}
                       ]}
                     ]
                   }
@@ -337,19 +346,21 @@ cards:
       type: vertical-stack
       cards: >-
         ${(function(){
-          var uuids=(states['sensor.device_alerts_config']
-            &&states['sensor.device_alerts_config'].attributes
-            &&states['sensor.device_alerts_config'].attributes.ignore_uuids)||[];
+          var cfgAttr=(states['sensor.device_alerts_config']
+            &&states['sensor.device_alerts_config'].attributes)||{};
+          var uuids=cfgAttr.ignore_uuids||[];
+          var names=cfgAttr.ignore_uuid_names||{};
           var header=[{type:'markdown',content:'### Ignored Device UUIDs'}];
           if(uuids.length===0){
             return header.concat([{type:'markdown',
               content:'*No devices ignored. Use the **Ignore** button on each device above.*'}]);
           }
           return header.concat(uuids.map(function(u){
+            var displayName=names[u]||'(unknown device)';
             return{
               type:'horizontal-stack',
               cards:[
-                {type:'markdown',content:'`'+u+'`'},
+                {type:'markdown',content:'**'+displayName+'**  \n`'+u+'`'},
                 {show_name:true,show_icon:false,type:'button',name:'Remove',
                  tap_action:{action:'call-service',
                    service:'device_alerts.remove_ignore_uuid',

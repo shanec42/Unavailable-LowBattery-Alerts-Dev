@@ -348,12 +348,20 @@ class DeviceAlertsCoordinator(DataUpdateCoordinator):
                 except Exception as notify_exc:  # noqa: BLE001
                     _LOGGER.error("device_alerts: notification error (sensor data still updated): %s", notify_exc)
             self._silent_refresh = False
+            ignore_uuids_list = list(cfg_json.get("ignore_uuids", []))
+            dr = device_registry.async_get(self.hass)
+            ignore_uuid_names = {
+                uid: (dr.async_get(uid).name_by_user or dr.async_get(uid).name or uid)
+                if dr.async_get(uid) else uid
+                for uid in ignore_uuids_list
+            }
             return {
                 "unavail": unavail,
                 "battery": battery,
                 "config": {
                     "ignore_patterns":    cfg_json.get("ignore_patterns", []),
-                    "ignore_uuids":      list(cfg_json.get("ignore_uuids", [])),
+                    "ignore_uuids":      ignore_uuids_list,
+                    "ignore_uuid_names":  ignore_uuid_names,
                     "threshold_overrides": cfg_json.get("threshold_overrides", {}),
                 },
             }
@@ -438,6 +446,20 @@ class DeviceAlertsCoordinator(DataUpdateCoordinator):
         snoozed_map[uuid] = until.isoformat()
         await self.hass.async_add_executor_job(self._write_snooze_sync, snoozed_map)
         _LOGGER.info("device_alerts: quick-snoozed %s until %s", uuid, until.isoformat())
+        await self.async_refresh_silent()
+
+    async def async_unsnooze(self, uuid: str | None) -> None:
+        uuid = validate_key(uuid)
+        if not uuid:
+            _LOGGER.warning("device_alerts_unsnooze: no valid uuid provided")
+            return
+        snoozed_map = await self.hass.async_add_executor_job(self._read_snooze_sync)
+        if uuid not in snoozed_map:
+            _LOGGER.info("device_alerts: %s was not snoozed", uuid)
+            return
+        snoozed_map.pop(uuid, None)
+        await self.hass.async_add_executor_job(self._write_snooze_sync, snoozed_map)
+        _LOGGER.info("device_alerts: unsnoozed %s", uuid)
         await self.async_refresh_silent()
 
     async def async_quick_ignore(self, uuid: str | None) -> None:
